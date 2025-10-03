@@ -203,7 +203,10 @@ if len(m3u_files) >= 2:
     print(f"Вечерняя группа: {len(m3u_files) - morning_count} плейлистов")
     print("Расписание: 06:00-18:00 - утренняя группа, 18:00-06:00 - вечерняя группа")
 
- 
+print("\nИсправления:")
+print("✅ Заменил server.startup() на прямой вызов функции")
+print("✅ Сохранил все функции управления через telnet")
+
 print("\nЗапуск:")
 print(f"liquidsoap radio.liq")
 print("\nУправление через telnet:")
