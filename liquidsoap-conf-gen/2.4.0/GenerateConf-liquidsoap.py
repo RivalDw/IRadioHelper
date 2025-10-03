@@ -40,26 +40,27 @@ with open(output_file, "w", encoding="utf-8") as f:
     f.write("settings.server.telnet.bind_addr := \"0.0.0.0\"\n")
     f.write("settings.log.stdout := true\n")
     f.write("settings.log.file := false\n\n")
-
-    # Только корректные настройки для стабильности
+    f.write("# Дополнительные настройки системы\n")
+    f.write("settings.audioscrobbler.api_key := \"\"\n")
+    f.write("settings.audioscrobbler.api_secret := \"\"\n")
+    f.write("settings.scheduler.fast_queues := 2\n")
+    f.write("settings.scheduler.generic_queues := 5\n")
+    f.write("settings.prometheus.server := false\n")
+    f.write("settings.prometheus.server.port := 9599\n\n")
     f.write("# Настройки для стабильности\n")
     f.write("settings.frame.audio.size := 1024\n")
     f.write("\n")
 
     playlist_names = []
 
-    # Создаём плейлисты с улучшенными настройками
     for idx, pl_path in enumerate(m3u_files, start=1):
         base_name = os.path.splitext(os.path.basename(pl_path))[0]
         safe_name = base_name.replace(" ", "_").replace("-", "_")
         pl_name = f"playlist_{safe_name}"
-        
-        # Улучшенный плейлист с кэшированием и стабильными настройками
         f.write(f'{pl_name} = playlist.reloadable(mode=\"randomize\", reload=60, \"{pl_path}\")\n')
         f.write(f'{pl_name} = cue_cut({pl_name})\n')  # Обрезка тишины в начале/конце
         playlist_names.append(pl_name)
 
-    # Создаем основной источник с безопасным fallback
     f.write(f'\n# Основной источник с безопасным переходом\n')
     
     if len(playlist_names) >= 2:
@@ -67,7 +68,6 @@ with open(output_file, "w", encoding="utf-8") as f:
     else:
         f.write(f'main_rotation = {playlist_names[0]}\n')
     
-    # Улучшенный fallback с буферизацией
     f.write('# Резервный источник на случай проблем\n')
     f.write('safe_fallback = single(fallible=true, \"D:/Music/fallback/track.mp3\")\n')
     f.write('safe_fallback = cue_cut(safe_fallback)\n')
@@ -142,7 +142,6 @@ with open(output_file, "w", encoding="utf-8") as f:
     f.write('# Локальный вывод\n')
     f.write('output.ao(final_source)\n\n')
 
-
     f.write('# Telnet команды\n')
     
     # Команда skip 
@@ -202,6 +201,7 @@ print("✓ Исправлен mksafe - убран параметр buffer")
 print("✓ Исправлен кроссфейд - используем crossfade вместо cross.smart")
 print("✓ Убраны неподдерживаемые параметры из normalize")
 print("✓ Исправлен синтаксис fallback")
+print("✓ Добавлены дополнительные настройки системы")
 
 print("\nВажно: Убедитесь, что файл D:/Music/fallback/track.mp3 существует")
 
