@@ -35,36 +35,43 @@ with open(output_file, "w", encoding="utf-8") as f:
     f.write("# Автогенерация конфигурации для Windows Liquidsoap 2.4\n\n")
    
     f.write("# Включение telnet управления\n")
-    f.write("set(\"server.telnet\",true)\n")
-    f.write(f"set(\"server.telnet.port\",{args.telnet_port})\n")
-    f.write("set(\"log.stdout\",true)\n")
-    f.write("set(\"log.file\",false)\n\n")
+    f.write("settings.server.telnet := true\n")
+    f.write(f"settings.server.telnet.port := {args.telnet_port}\n")
+    f.write("settings.server.telnet.bind_addr := \"0.0.0.0\"\n")
+    f.write("settings.log.stdout := true\n")
+    f.write("settings.log.file := false\n\n")
 
     playlist_names = []
 
-    # Создаём простые плейлисты
+    # Создаём плейлисты с возможностью перезагрузки
     for idx, pl_path in enumerate(m3u_files, start=1):
         base_name = os.path.splitext(os.path.basename(pl_path))[0]
         safe_name = base_name.replace(" ", "_").replace("-", "_")
         pl_name = f"playlist_{safe_name}"
         
-        f.write(f'{pl_name} = playlist(\"{pl_path}\")\n')
+        f.write(f'{pl_name} = playlist(reload_mode=\"watch\", \"{pl_path}\")\n')
         playlist_names.append(pl_name)
 
-    # Создаем основной источник
+    # Создаем основной источник с безопасным fallback
+    f.write(f'\n# Основной источник с безопасным переходом\n')
+    
     if len(playlist_names) >= 2:
-        f.write(f'\n# Основной источник - случайный из всех плейлистов\n')
-        f.write(f'main_source = random([{", ".join(playlist_names)}])\n\n')
+        f.write(f'main_rotation = random([{", ".join(playlist_names)}])\n')
     else:
-        f.write(f'\nmain_source = {playlist_names[0]}\n\n')
+        f.write(f'main_rotation = {playlist_names[0]}\n')
+    
+    # Добавляем безопасный источник с fallback - используем простой single с явным указанием fallible
+    f.write('# Резервный источник на случай проблем\n')
+    f.write('safe_fallback = single(fallible=true, \"D:/Music/fallback/track.mp3\")\n')
+    f.write('main_source = fallback(track_sensitive=false, [main_rotation, safe_fallback])\n\n')
     
     # Добавляем нормализацию
     f.write('# Нормализация звука\n')
     f.write('main_source = normalize(main_source)\n\n')
     
-    # Добавляем кроссфейд
+    # Добавляем кроссфейд с безопасными настройками
     f.write('# Плавные переходы между треками\n')
-    f.write('main_source = crossfade(main_source)\n\n')
+    f.write('main_source = crossfade(duration=3., main_source)\n\n')
     
     # Обработка метаданных для логирования
     f.write('# Обработка метаданных для логирования\n')
@@ -75,11 +82,12 @@ with open(output_file, "w", encoding="utf-8") as f:
     f.write('  m\n')
     f.write('end\n\n')
     
-    f.write('main_source = map_metadata(log_metadata, main_source)\n\n')
+    f.write('main_source = metadata.map(log_metadata, main_source)\n\n')
     
+    # Преобразуем в безупречный источник
     f.write('final_source = mksafe(main_source)\n\n')
 
-    # Вывод на Icecast 
+    # Вывод на Icecast с правильной кодировкой
     f.write('# Вывод на Icecast\n')
     f.write('output.icecast(\n')
     f.write(f'  %ffmpeg(format=\"mp3\", %audio(codec=\"libmp3lame\", b=\"{args.bitrate}\")),\n')
@@ -97,25 +105,43 @@ with open(output_file, "w", encoding="utf-8") as f:
     # Простые telnet команды
     f.write('# Telnet команды\n')
     
-    # Команда skip
+    # Команда skip 
     f.write('def skip(_) =\n')
-    f.write('  source.skip(main_source)\n')
+    f.write('  source.skip(main_rotation)\n')
     f.write('  \"Track skipped\"\n')
     f.write('end\n')
     
-    # Команда reload 
+    # Команда reload  
     f.write('def reload(_) =\n')
-    for pl_name in playlist_names:
-        f.write(f'  {pl_name}.reload()\n')
-    f.write('  \"Playlists reloaded\"\n')
+    f.write('  log(\"Playlists are automatically reloaded when files change\")\n')
+    f.write('  \"Playlists use watch mode - auto reload on file changes\"\n')
+    f.write('end\n')
+    
+    # Команда status 
+    f.write('def status(_) =\n')
+    f.write(f'  \"Status: Playlists={len(playlist_names)} Icecast={args.host}:{args.port}/{args.mount} Bitrate={args.bitrate} Telnet={args.telnet_port}\"\n')
+    f.write('end\n')
+    
+    # Команда help 
+    f.write('def help(_) =\n')
+    f.write('  \"Available commands: status skip reload help quit\"\n')
+    f.write('end\n')
+    
+    # Команда welcome
+    f.write('def welcome(_) =\n')
+    f.write('  \"Welcome to Radio Control! Type \\\"help\\\" for commands.\"\n')
     f.write('end\n')
     
     # Регистрация команд
     f.write('server.register(\"skip\", skip)\n')
-    f.write('server.register(\"reload\", reload)\n\n')
+    f.write('server.register(\"reload\", reload)\n')
+    f.write('server.register(\"status\", status)\n')
+    f.write('server.register(\"help\", help)\n')
+    f.write('server.register(\"welcome\", welcome)\n\n')
     
     # Стартовое сообщение
     f.write('log(\"Radio started! Playlists: {len(playlist_names)}\")\n')
+    f.write('log(\"Telnet control: telnet localhost {args.telnet_port}\")\n')
 
 print(f"Конфиг сгенерирован и сохранён в {output_file}")
 print(f"Обработано плейлистов: {len(m3u_files)}")
@@ -126,12 +152,21 @@ print(f"  Mount: /{args.mount}")
 print(f"  Битрейт: {args.bitrate}")
 print(f"Telnet управление:")
 print(f"  Порт: {args.telnet_port}")
-print(f"  Команды: skip, reload")
+print(f"  Команды: welcome, help, status, skip, reload")
+ 
+print("\nВажно: Убедитесь, что файл D:/Music/fallback/track.mp3 существует")
+print("Или измените путь на существующий MP3 файл")
 
-print("\nИспользование telnet:")
-print(f"telnet 127.0.0.1 {args.telnet_port}")
-print("> skip          - пропустить трек")
-print("> reload        - перезагрузить плейлисты")
+print("\nИнструкция по использованию telnet:")
+print(f"1. Откройте командную строку")
+print(f"2. Введите: telnet 127.0.0.1 {args.telnet_port}")
+print(f"3. Если пустой экран - просто вводите команды:")
+print(f"   welcome  - приветственное сообщение")
+print(f"   help     - список команд")
+print(f"   status   - статус радио")
+print(f"   skip     - пропустить трек")
+print(f"   reload   - информация о перезагрузке плейлистов")
+print(f"   quit     - выйти из telnet")
 
 print("\nЗапуск:")
 print(f"liquidsoap radio.liq")
