@@ -1,4 +1,4 @@
-# Simple M3U Creator - PowerShell 7+ (Expanded Genre Detection & Memory Optimized)
+# Simple M3U Creator - PowerShell 7+ (Improved Genre Detection & Memory Optimized)
 
 # Check PowerShell version
 if ($PSVersionTable.PSVersion.Major -lt 7) {
@@ -21,7 +21,7 @@ if ($PSVersionTable.PSVersion.Major -lt 7) {
 Write-Host "PowerShell $($PSVersionTable.PSVersion) detected - proceeding with script..." -ForegroundColor Green
 
 chcp 65001 | Out-Null
-$Host.UI.RawUI.WindowTitle = "Simple M3U Creator - PowerShell 7+ (Expanded Genres)"
+$Host.UI.RawUI.WindowTitle = "Simple M3U Creator - PowerShell 7+ (Improved Genres)"
 
 # Paths
 $music_path = "D:\Music"
@@ -95,6 +95,26 @@ function Get-MemoryUsage {
     return $memoryMB
 }
 
+# Function to normalize genre names
+function Normalize-GenreName {
+    param([string]$genreName)
+    
+    $genreMap = @{
+        "Pop-Rock" = "Rock"
+        "Hard Rock" = "Rock" 
+        "Alternative Rock" = "Rock"
+        "Classic Rock" = "Rock"
+        "Electronic Body Music" = "EBM"
+        "Electro Metal" = "Industrial Metal"
+        "Neue Deutsche Härte" = "Industrial Metal"
+    }
+    
+    if ($genreMap.ContainsKey($genreName)) {
+        return $genreMap[$genreName]
+    }
+    return $genreName
+}
+
 # Expanded genre mapping with more artists and genres
 $GenreMapping = @{
     # Industrial Metal and related genres
@@ -105,7 +125,7 @@ $GenreMapping = @{
     )
     "Neue Deutsche Härte" = @(
         "rammstein", "oomph", "megaherz", "eisbrecher", "unheilig", "stahlmann",
-        "ost+front", "die krupps", "and one", "wumpscut"
+        "ost\+front", "die krupps", "and one", "wumpscut"
     )
     "Gothic Metal" = @(
         "lacrimosa", "lacuna coil", "within temptation", "nightwish", "evanescence",
@@ -122,7 +142,7 @@ $GenreMapping = @{
     )
     "Dark Electro" = @(
         "wumpscut", "hocico", "suicide commando", "combichrist", "grendel",
-        "agonoize", "meister", "x-fusion", "centhron"
+        "agonoize", "meister", "x\-fusion", "centhron"
     )
     "Heavy Metal" = @(
         "metallica", "iron maiden", "judas priest", "black sabbath", "ozzy osbourne",
@@ -137,7 +157,7 @@ $GenreMapping = @{
         "mindless self indulgence"
     )
     "Electronic Body Music" = @(
-        "front 242", "nitzer ebb", "die krupps", "a split-second", "the klinik",
+        "front 242", "nitzer ebb", "die krupps", "a split\-second", "the klinik",
         "skinny puppy", "cabaret voltaire"
     )
     # Other existing genres
@@ -150,7 +170,7 @@ $GenreMapping = @{
         "immortal", "behemoth", "dimmu borgir", "cradle of filth"
     )
     "Punk Rock" = @(
-        "bloodhound gang", "green day", "blink.182", "offspring", "rancid",
+        "bloodhound gang", "green day", "blink\-182", "offspring", "rancid",
         "no fx", "bad religion", "the exploited", "sex pistols", "the clash"
     )
     "Grunge" = @(
@@ -158,12 +178,12 @@ $GenreMapping = @{
         "mudhoney", "smashing pumpkins", "bush"
     )
     "Hard Rock" = @(
-        "ac.dc", "guns n.roses", "aerosmith", "van halen", "kiss",
+        "ac\/dc", "guns n'roses", "aerosmith", "van halen", "kiss",
         "def leppard", "whitesnake", "scorpions", "deep purple"
     )
     "Hip-Hop" = @(
-        "eminem", "50 cent", "dr.dre", "snoop dogg", "tupac", "notorious b.i.g",
-        "jay-z", "nas", "wu-tang clan", "public enemy"
+        "eminem", "50 cent", "dr\.dre", "snoop dogg", "tupac", "notorious b\.i\.g",
+        "jay\-z", "nas", "wu\-tang clan", "public enemy"
     )
     "Pop" = @(
         "rihanna", "britney spears", "justin bieber", "taylor swift", "lady gaga",
@@ -171,7 +191,22 @@ $GenreMapping = @{
     )
     "Electronic" = @(
         "daft punk", "chemical brothers", "prodigy", "fatboy slim", "aphex twin",
-        "kraftwerk", "jean-michel jarre", "tangerine dream"
+        "kraftwerk", "jean\-michel jarre", "tangerine dream"
+    )
+    # Russian artists mapping
+    "Russian Pop" = @(
+        "серега", "пират", "серега пират", "серегапират", "тимати", "баста", "грибы",
+        "монеточка", "иван дорн", "лсп", "элджей", "макс корж", "zivert", "мотивация",
+        "маршал", "каспийский груз", "полигамность", "раут"
+    )
+    "Russian Rock" = @(
+        "ддт", "кино", "наутилус помпилиус", "ария", "агата кристи",
+        "би\-2", "сплин", "звери", "мумий тролль", "чайф", "алиса",
+        "король и шут", "аукцыон", "наив", "ночные снайперы"
+    )
+    "Russian Hip-Hop" = @(
+        "каста", "центр", "психея", "трэш сцена", "антоха мс", "баста",
+        "смоки мо", "грот", "алексей вишня", "noize mc"
     )
 }
 
@@ -193,7 +228,7 @@ function Process-FileBatch {
         Write-Host "Processing batch $($i + 1)/$batchCount (Memory: $(Get-MemoryUsage) MB)" -ForegroundColor Gray
         
         $batchResults = $batchFiles | ForEach-Object -Parallel {
-            # Import the genre mapping
+            # Import the genre mapping and functions
             $GenreMapping = $using:GenreMapping
 
             function Parse-FileName { 
@@ -221,12 +256,21 @@ function Process-FileBatch {
 
             function Get-GenreFromArtist { 
                 param([string]$artist)
-                $a = $artist.ToLower()
+                $a = $artist.ToLower().Trim()
                 
-                # Check each genre category
+                # Сначала проверяем точные совпадения (для русских артистов)
                 foreach ($genre in $GenreMapping.Keys) {
                     foreach ($pattern in $GenreMapping[$genre]) {
-                        if ($a -match [regex]::Escape($pattern)) {
+                        if ($a -eq $pattern) {
+                            return $genre
+                        }
+                    }
+                }
+                
+                # Затем проверяем частичные совпадения
+                foreach ($genre in $GenreMapping.Keys) {
+                    foreach ($pattern in $GenreMapping[$genre]) {
+                        if ($a -match $pattern) {
                             return $genre
                         }
                     }
@@ -244,8 +288,14 @@ function Process-FileBatch {
                     $g = $folder.GetDetailsOf($file, 16)  # Genre property
                     if ([string]::IsNullOrWhiteSpace($g)) { return $null }
                     
-                    # Clean up genre tag - take first genre if multiple
                     $cleanGenre = ($g -split '[;|,]')[0].Trim()
+                    
+                    # Игнорировать слишком общие или некорректные жанры
+                    $ignoreGenres = @("Other", "Various", "Unknown", "Misc")
+                    if ($ignoreGenres -contains $cleanGenre) {
+                        return $null
+                    }
+                    
                     return $cleanGenre
                 } catch { 
                     return $null 
@@ -289,16 +339,16 @@ function Process-FileBatch {
                 $title = $file.BaseName -replace '^\d+\.\s*', ''
             }
 
-            $genre = $null
-            try {
+            # Приоритет: артист → теги
+            $genreFromArtist = Get-GenreFromArtist -artist $artist
+            if ($genreFromArtist -ne "Unknown") {
+                $genre = $genreFromArtist  # Приоритет у определения по артисту
+            } else {
+                # Только если по артисту не определилось, используем теги
                 $genre = Get-GenreFromTags -filePath $file.FullName
-            } catch {
-                $genre = $null
-            }
-            
-            # If no genre from tags, try to determine from artist
-            if (-not $genre -or [string]::IsNullOrWhiteSpace($genre)) { 
-                $genre = Get-GenreFromArtist -artist $artist 
+                if (-not $genre -or [string]::IsNullOrWhiteSpace($genre)) {
+                    $genre = "Unknown"
+                }
             }
 
             # Return minimal object
@@ -320,53 +370,96 @@ function Process-FileBatch {
     return $results
 }
 
-# Function to merge similar playlists (memory optimized)
+# Function to merge similar playlists (improved - объединяет плейлисты где один является подмножеством другого)
 function Merge-SimilarPlaylists {
     param([string]$playlistsDir)
     
-    Write-Host "Looking for similar playlists to merge..." -ForegroundColor Yellow
+    Write-Host "Умное объединение плейлистов..." -ForegroundColor Yellow
     
     $allPlaylists = Get-ChildItem -Path $playlistsDir -Filter "*.m3u" -File
-    $playlistGroups = @{}
+    $playlistInfo = @()
     
-    # Group playlists
-    Write-Host "Grouping playlists..." -ForegroundColor Cyan
-    $groupCount = 0
+    # Собираем информацию о всех плейлистах
     foreach ($playlist in $allPlaylists) {
-        $groupCount++
-        Show-Progress -Activity "Grouping playlists" -Status "Processing $($playlist.Name)" -Current $groupCount -Total $allPlaylists.Count
-        
         $baseName = $playlist.BaseName
-        $genres = $baseName -split '_' | ForEach-Object { $_.Trim() } | Sort-Object
-        $genreKey = ($genres -join '_').ToLower()
+        $genres = $baseName -split '_' | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne "" } | Sort-Object
         
-        if (-not $playlistGroups.ContainsKey($genreKey)) {
-            $playlistGroups[$genreKey] = [System.Collections.Generic.List[string]]::new()
+        # Создаем HashSet правильно
+        $genreSet = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+        foreach ($genre in $genres) {
+            $null = $genreSet.Add($genre)
         }
-        $playlistGroups[$genreKey].Add($playlist.FullName)
+        
+        $playlistInfo += @{
+            Path = $playlist.FullName
+            Name = $playlist.Name
+            BaseName = $baseName
+            Genres = $genres
+            GenreSet = $genreSet
+            GenreKey = ($genres -join '_').ToLower()
+        }
     }
-    Show-Progress -Activity "Grouping playlists" -Completed
     
     $mergedCount = 0
     $removedCount = 0
-    $totalGroups = $playlistGroups.Count
-    $currentGroup = 0
+    $processedPlaylists = @{}
     
-    # Process each group
-    foreach ($genreKey in $playlistGroups.Keys) {
-        $currentGroup++
-        $group = $playlistGroups[$genreKey]
+    # Группируем плейлисты по основным жанрам
+    Write-Host "Анализ плейлистов для объединения..." -ForegroundColor Cyan
+    
+    for ($i = 0; $i -lt $playlistInfo.Count; $i++) {
+        if ($processedPlaylists.ContainsKey($playlistInfo[$i].Path)) { continue }
         
-        if ($group.Count -gt 1) {
-            $status = "Merging $($group.Count) playlists"
-            Show-Progress -Activity "Merging similar playlists" -Status $status -Current $currentGroup -Total $totalGroups
+        $current = $playlistInfo[$i]
+        $similarPlaylists = @($current.Path)
+        
+        # Ищем плейлисты, которые являются подмножествами или надмножествами текущего
+        for ($j = $i + 1; $j -lt $playlistInfo.Count; $j++) {
+            if ($processedPlaylists.ContainsKey($playlistInfo[$j].Path)) { continue }
             
-            Write-Host "Merging $($group.Count) playlists for genres: $genreKey" -ForegroundColor Cyan
+            $other = $playlistInfo[$j]
             
-            # Use HashSet for track deduplication (memory efficient)
+            # Проверяем, является ли один плейлист подмножеством другого
+            $isCurrentSubsetOfOther = $true
+            foreach ($genre in $current.GenreSet) {
+                if (-not $other.GenreSet.Contains($genre)) {
+                    $isCurrentSubsetOfOther = $false
+                    break
+                }
+            }
+            
+            $isOtherSubsetOfCurrent = $true
+            foreach ($genre in $other.GenreSet) {
+                if (-not $current.GenreSet.Contains($genre)) {
+                    $isOtherSubsetOfCurrent = $false
+                    break
+                }
+            }
+            
+            $isSubset = $isCurrentSubsetOfOther -or $isOtherSubsetOfCurrent
+            
+            if ($isSubset) {
+                $similarPlaylists += $other.Path
+                $processedPlaylists[$other.Path] = $true
+            }
+        }
+        
+        if ($similarPlaylists.Count -gt 1) {
+            Write-Host "Объединение $($similarPlaylists.Count) плейлистов: $($current.BaseName) и связанные" -ForegroundColor Cyan
+            
+            # Находим самый полный набор жанров (с наибольшим количеством жанров)
+            $maxGenres = $current.Genres
+            foreach ($playlistPath in $similarPlaylists) {
+                $pl = $playlistInfo | Where-Object { $_.Path -eq $playlistPath }
+                if ($pl.Genres.Count -gt $maxGenres.Count) {
+                    $maxGenres = $pl.Genres
+                }
+            }
+            
+            # Use HashSet for track deduplication
             $allTracks = @{}
             
-            foreach ($playlistFile in $group) {
+            foreach ($playlistFile in $similarPlaylists) {
                 $content = Get-Content -Path $playlistFile -Encoding UTF8
                 $currentTrack = $null
                 
@@ -382,15 +475,12 @@ function Merge-SimilarPlaylists {
                 }
             }
             
-            # Create merged playlist
+            # Create merged playlist with the most complete genre set
             if ($allTracks.Count -gt 0) {
-                $genresArray = $genreKey -split '_' | ForEach-Object { 
-                    (Get-Culture).TextInfo.ToTitleCase($_.ToLower())
-                }
-                $newName = ($genresArray -join '_') + ".m3u"
+                $newName = ($maxGenres -join '_') + ".m3u"
                 $newPath = Join-Path $playlistsDir $newName
                 
-                # Stream write to file instead of building in memory
+                # Stream write to file
                 $stream = [System.IO.StreamWriter]::new($newPath, $false, [System.Text.Encoding]::UTF8)
                 $stream.WriteLine("#EXTM3U")
                 
@@ -401,7 +491,7 @@ function Merge-SimilarPlaylists {
                 $stream.Close()
                 
                 # Remove old playlists
-                foreach ($oldPlaylist in $group) {
+                foreach ($oldPlaylist in $similarPlaylists) {
                     if ($oldPlaylist -ne $newPath) {
                         Remove-Item -Path $oldPlaylist -Force
                         $removedCount++
@@ -409,21 +499,21 @@ function Merge-SimilarPlaylists {
                 }
                 
                 $mergedCount++
-                Write-Host "  -> Created merged playlist: $newName ($($allTracks.Count) tracks)" -ForegroundColor Green
+                Write-Host "  -> Создан объединенный плейлист: $newName ($($allTracks.Count) треков)" -ForegroundColor Green
             }
             
-            # Clean up
             $allTracks.Clear()
         }
+        
+        $processedPlaylists[$current.Path] = $true
     }
     
-    Show-Progress -Activity "Merging similar playlists" -Completed
-    Write-Host "Merge completed: $mergedCount merged playlists, $removedCount old playlists removed" -ForegroundColor Green
+    Write-Host "Объединение завершено: $mergedCount объединенных плейлистов, $removedCount старых плейлистов удалено" -ForegroundColor Green
     return @{ Merged = $mergedCount; Removed = $removedCount }
 }
 
 # Main processing
-Write-Host "Starting processing with expanded genre detection..." -ForegroundColor Yellow
+Write-Host "Starting processing with improved genre detection..." -ForegroundColor Yellow
 Write-Host "Initial memory usage: $(Get-MemoryUsage) MB" -ForegroundColor Gray
 
 # Process files
@@ -431,6 +521,10 @@ $results = Process-FileBatch -Files $audioFiles -BatchSize 200
 
 Write-Host "Processing completed. Memory usage: $(Get-MemoryUsage) MB" -ForegroundColor Green
 Write-Host "Building playlists..." -ForegroundColor Yellow
+
+# Calculate adaptive minimum tracks for playlist
+$minTracksForPlaylist = [math]::Max(3, [math]::Min(10, [int]($total_files / 500)))
+Write-Host "Минимальное количество треков для плейлиста: $minTracksForPlaylist" -ForegroundColor Cyan
 
 # Build main playlist with streaming
 Write-Host "Building main playlist..." -ForegroundColor Cyan
@@ -447,15 +541,18 @@ foreach ($track in $results) {
     $mainStream.WriteLine("#EXTINF:-1,$($track.Artist) - $($track.Title)")
     $mainStream.WriteLine($track.FilePath)
 
-    # Build genre collections
-    if (-not $genreCount.ContainsKey($track.Genre)) {
-        $genreCount[$track.Genre] = 0
-        $genreTracks[$track.Genre] = [System.Collections.Generic.List[object]]::new()
-    }
-    $genreCount[$track.Genre]++
-    $genreTracks[$track.Genre].Add(@{ FilePath=$track.FilePath; Artist=$track.Artist; Title=$track.Title })
+    # Normalize genre name before counting
+    $normalizedGenre = Normalize-GenreName($track.Genre)
 
-    if ($track.Genre -ne "Unknown") { $files_with_genre++ }
+    # Build genre collections
+    if (-not $genreCount.ContainsKey($normalizedGenre)) {
+        $genreCount[$normalizedGenre] = 0
+        $genreTracks[$normalizedGenre] = [System.Collections.Generic.List[object]]::new()
+    }
+    $genreCount[$normalizedGenre]++
+    $genreTracks[$normalizedGenre].Add(@{ FilePath=$track.FilePath; Artist=$track.Artist; Title=$track.Title })
+
+    if ($normalizedGenre -ne "Unknown") { $files_with_genre++ }
 }
 
 $mainStream.Close()
@@ -466,7 +563,7 @@ Write-Host "Writing genre playlists..." -ForegroundColor Yellow
 $genreKeys = @($genreCount.Keys)
 $currentGenre = 0
 
-# Log found genres for debugging
+# Log found genres
 Write-Host "Found genres: $($genreKeys -join ', ')" -ForegroundColor Cyan
 
 foreach ($genre in $genreKeys) {
@@ -475,7 +572,7 @@ foreach ($genre in $genreKeys) {
     
     Show-Progress -Activity "Writing genre playlists" -Status "Processing $genre ($count tracks)" -Current $currentGenre -Total $genreKeys.Count
     
-    if ($genre -ne "Unknown" -and $count -gt 5) {  # Reduced threshold to 5 tracks
+    if ($genre -ne "Unknown" -and $count -ge $minTracksForPlaylist) {
         $genrePlaylistName = SanitizeFileName($genre)
         
         if ($genrePlaylistName.Length -gt 50) { 
@@ -514,7 +611,7 @@ $genreTracks.Clear()
 [System.GC]::Collect()
 [System.GC]::WaitForPendingFinalizers()
 
-# Logging
+# Logging and statistics
 $stopwatch.Stop()
 "" | Out-File -FilePath $logFile -Append
 "=== Completed: $(Get-Date) ===" | Out-File -FilePath $logFile -Append
@@ -527,9 +624,15 @@ $stopwatch.Stop()
 "Playlists removed: $($mergeResults.Removed)" | Out-File -FilePath $logFile -Append
 "Peak memory usage: $(Get-MemoryUsage) MB" | Out-File -FilePath $logFile -Append
 
+# Top genres statistics
+Write-Host "`nТоп жанров:" -ForegroundColor Cyan
+$genreCount.GetEnumerator() | Sort-Object Value -Descending | Select-Object -First 10 | ForEach-Object {
+    Write-Host "  $($_.Key): $($_.Value) треков" -ForegroundColor White
+}
+
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Green
-Write-Host "COMPLETED! (Expanded Genre Detection)" -ForegroundColor Green
+Write-Host "COMPLETED! (Improved Genre Detection)" -ForegroundColor Green
 Write-Host "Main playlist: $main_playlist" -ForegroundColor Cyan
 Write-Host "Genre playlists: $genre_dir\" -ForegroundColor Cyan
 Write-Host "Log file: $logFile" -ForegroundColor Cyan
@@ -540,6 +643,7 @@ Write-Host "Playlists merged: $($mergeResults.Merged)" -ForegroundColor Magenta
 Write-Host "Duplicate playlists removed: $($mergeResults.Removed)" -ForegroundColor Magenta
 Write-Host "Final memory usage: $(Get-MemoryUsage) MB" -ForegroundColor Gray
 Write-Host "========================================" -ForegroundColor Green
+
 Write-Host ""
 Write-Host "Press any key to continue..."
 $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
