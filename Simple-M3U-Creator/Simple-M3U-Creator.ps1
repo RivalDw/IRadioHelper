@@ -1,4 +1,4 @@
-# Simple M3U Creator - PowerShell 7+ (Optimized Memory Usage)
+# Simple M3U Creator - PowerShell 7+ (Expanded Genre Detection & Memory Optimized)
 
 # Check PowerShell version
 if ($PSVersionTable.PSVersion.Major -lt 7) {
@@ -21,7 +21,7 @@ if ($PSVersionTable.PSVersion.Major -lt 7) {
 Write-Host "PowerShell $($PSVersionTable.PSVersion) detected - proceeding with script..." -ForegroundColor Green
 
 chcp 65001 | Out-Null
-$Host.UI.RawUI.WindowTitle = "Simple M3U Creator - PowerShell 7+ (Memory Optimized)"
+$Host.UI.RawUI.WindowTitle = "Simple M3U Creator - PowerShell 7+ (Expanded Genres)"
 
 # Paths
 $music_path = "D:\Music"
@@ -95,11 +95,91 @@ function Get-MemoryUsage {
     return $memoryMB
 }
 
-# Function to process files in batches (reduces memory pressure)
+# Expanded genre mapping with more artists and genres
+$GenreMapping = @{
+    # Industrial Metal and related genres
+    "Industrial Metal" = @(
+        "oomph", "rammstein", "megaherz", "eisbrecher", "kmfdm", "ministry", 
+        "nine inch nails", "korn", "rob zombie", "white zombie", "static-x",
+        "fear factory", "godflesh", "ministry", "pig", "killing joke"
+    )
+    "Neue Deutsche Härte" = @(
+        "rammstein", "oomph", "megaherz", "eisbrecher", "unheilig", "stahlmann",
+        "ost+front", "die krupps", "and one", "wumpscut"
+    )
+    "Gothic Metal" = @(
+        "lacrimosa", "lacuna coil", "within temptation", "nightwish", "evanescence",
+        "the gathering", "theatre of tragedy", "tristania", "sirenia", "leaves' eyes",
+        "after forever", "epica", "within temptation"
+    )
+    "EBM" = @(
+        "front 242", "front line assembly", "nitzer ebb", "wumpscut", "vnv nation",
+        "and one", "assemblage 23", "covenant", "combichrist", "suicide commando"
+    )
+    "Darkwave" = @(
+        "clan of xymox", "the cure", "bauhaus", "sisters of mercy", "siouxsie and the banshees",
+        "depeche mode", "cocteau twins", "this mortal coil", "dead can dance"
+    )
+    "Dark Electro" = @(
+        "wumpscut", "hocico", "suicide commando", "combichrist", "grendel",
+        "agonoize", "meister", "x-fusion", "centhron"
+    )
+    "Heavy Metal" = @(
+        "metallica", "iron maiden", "judas priest", "black sabbath", "ozzy osbourne",
+        "dio", "motorhead", "manowar", "saxon", "dokken"
+    )
+    "Industrial Rock" = @(
+        "nine inch nails", "filter", "stabbing westward", "marylin manson", "prick",
+        "pigface", "16volt", "acumen nation"
+    )
+    "Electro Metal" = @(
+        "celldweller", "blue stahli", "the algorithm", "iggorrr", "rabbeat",
+        "mindless self indulgence"
+    )
+    "Electronic Body Music" = @(
+        "front 242", "nitzer ebb", "die krupps", "a split-second", "the klinik",
+        "skinny puppy", "cabaret voltaire"
+    )
+    # Other existing genres
+    "Alternative Metal" = @(
+        "slipknot", "system of a down", "deftones", "tool", "korn",
+        "mudvayne", "coal chamber", "kittie", "soad"
+    )
+    "Extreme Metal" = @(
+        "cannibal corpse", "marduk", "darkthrone", "mayhem", "emperor",
+        "immortal", "behemoth", "dimmu borgir", "cradle of filth"
+    )
+    "Punk Rock" = @(
+        "bloodhound gang", "green day", "blink.182", "offspring", "rancid",
+        "no fx", "bad religion", "the exploited", "sex pistols", "the clash"
+    )
+    "Grunge" = @(
+        "nirvana", "pearl jam", "soundgarden", "alice in chains", "stone temple pilots",
+        "mudhoney", "smashing pumpkins", "bush"
+    )
+    "Hard Rock" = @(
+        "ac.dc", "guns n.roses", "aerosmith", "van halen", "kiss",
+        "def leppard", "whitesnake", "scorpions", "deep purple"
+    )
+    "Hip-Hop" = @(
+        "eminem", "50 cent", "dr.dre", "snoop dogg", "tupac", "notorious b.i.g",
+        "jay-z", "nas", "wu-tang clan", "public enemy"
+    )
+    "Pop" = @(
+        "rihanna", "britney spears", "justin bieber", "taylor swift", "lady gaga",
+        "katy perry", "madonna", "michael jackson", "beyonce"
+    )
+    "Electronic" = @(
+        "daft punk", "chemical brothers", "prodigy", "fatboy slim", "aphex twin",
+        "kraftwerk", "jean-michel jarre", "tangerine dream"
+    )
+}
+
+# Function to process files in batches
 function Process-FileBatch {
     param(
         [array]$Files,
-        [int]$BatchSize = 100
+        [int]$BatchSize = 200
     )
     
     $results = [System.Collections.Generic.List[object]]::new()
@@ -113,7 +193,9 @@ function Process-FileBatch {
         Write-Host "Processing batch $($i + 1)/$batchCount (Memory: $(Get-MemoryUsage) MB)" -ForegroundColor Gray
         
         $batchResults = $batchFiles | ForEach-Object -Parallel {
-            # Minimal function definitions to reduce memory footprint
+            # Import the genre mapping
+            $GenreMapping = $using:GenreMapping
+
             function Parse-FileName { 
                 param([string]$filename, [string]$directory)
                 
@@ -140,16 +222,16 @@ function Process-FileBatch {
             function Get-GenreFromArtist { 
                 param([string]$artist)
                 $a = $artist.ToLower()
-                if ($a -match "oomph|rammstein|megaherz|eisbrecher|kmfdm|ministry") { return "Industrial Metal" }
-                if ($a -match "slipknot|korn|system of a down|deftones") { return "Alternative Metal" }
-                if ($a -match "metallica|iron maiden|judas priest") { return "Heavy Metal" }
-                if ($a -match "cannibal corpse|marduk|darkthrone|mayhem") { return "Extreme Metal" }
-                if ($a -match "bloodhound gang|green day|blink.182|offspring") { return "Punk Rock" }
-                if ($a -match "nirvana|pearl jam|soundgarden|alice in chains") { return "Grunge" }
-                if ($a -match "ac.dc|guns n.roses|aerosmith") { return "Hard Rock" }
-                if ($a -match "eminem|50 cent|dr.dre|snoop dogg|tupac|notorious b.i.g") { return "Hip-Hop" }
-                if ($a -match "rihanna|britney spears|justin bieber|taylor swift") { return "Pop" }
-                if ($a -match "daft punk|chemical brothers|prodigy|fatboy slim") { return "Electronic" }
+                
+                # Check each genre category
+                foreach ($genre in $GenreMapping.Keys) {
+                    foreach ($pattern in $GenreMapping[$genre]) {
+                        if ($a -match [regex]::Escape($pattern)) {
+                            return $genre
+                        }
+                    }
+                }
+                
                 return "Unknown"
             }
 
@@ -159,9 +241,12 @@ function Process-FileBatch {
                     $shell = New-Object -ComObject Shell.Application
                     $folder = $shell.Namespace((Split-Path $filePath))
                     $file = $folder.ParseName((Split-Path $filePath -Leaf))
-                    $g = $folder.GetDetailsOf($file, 16)
+                    $g = $folder.GetDetailsOf($file, 16)  # Genre property
                     if ([string]::IsNullOrWhiteSpace($g)) { return $null }
-                    return $g.Trim()
+                    
+                    # Clean up genre tag - take first genre if multiple
+                    $cleanGenre = ($g -split '[;|,]')[0].Trim()
+                    return $cleanGenre
                 } catch { 
                     return $null 
                 }
@@ -211,6 +296,7 @@ function Process-FileBatch {
                 $genre = $null
             }
             
+            # If no genre from tags, try to determine from artist
             if (-not $genre -or [string]::IsNullOrWhiteSpace($genre)) { 
                 $genre = Get-GenreFromArtist -artist $artist 
             }
@@ -222,7 +308,7 @@ function Process-FileBatch {
                 Title = $title
                 Genre = $genre
             }
-        } -ThrottleLimit 4  # Reduced throttle limit to save memory
+        } -ThrottleLimit 4
         
         $results.AddRange($batchResults)
         
@@ -336,17 +422,17 @@ function Merge-SimilarPlaylists {
     return @{ Merged = $mergedCount; Removed = $removedCount }
 }
 
-# Main processing with memory monitoring
-Write-Host "Starting processing with memory optimization..." -ForegroundColor Yellow
+# Main processing
+Write-Host "Starting processing with expanded genre detection..." -ForegroundColor Yellow
 Write-Host "Initial memory usage: $(Get-MemoryUsage) MB" -ForegroundColor Gray
 
-# Process files in batches to control memory usage
+# Process files
 $results = Process-FileBatch -Files $audioFiles -BatchSize 200
 
 Write-Host "Processing completed. Memory usage: $(Get-MemoryUsage) MB" -ForegroundColor Green
 Write-Host "Building playlists..." -ForegroundColor Yellow
 
-# Build main playlist with streaming to avoid large memory usage
+# Build main playlist with streaming
 Write-Host "Building main playlist..." -ForegroundColor Cyan
 $mainStream = [System.IO.StreamWriter]::new($main_playlist, $false, [System.Text.Encoding]::UTF8)
 $mainStream.WriteLine("#EXTM3U")
@@ -380,16 +466,18 @@ Write-Host "Writing genre playlists..." -ForegroundColor Yellow
 $genreKeys = @($genreCount.Keys)
 $currentGenre = 0
 
+# Log found genres for debugging
+Write-Host "Found genres: $($genreKeys -join ', ')" -ForegroundColor Cyan
+
 foreach ($genre in $genreKeys) {
     $currentGenre++
     $count = $genreCount[$genre]
     
     Show-Progress -Activity "Writing genre playlists" -Status "Processing $genre ($count tracks)" -Current $currentGenre -Total $genreKeys.Count
     
-    if ($genre -ne "Unknown" -and $count -gt 10) {
-        $genrePlaylistName = ($genre -split '[;|,]').Trim() | Select-Object -First 1
-        $genrePlaylistName = SanitizeFileName($genrePlaylistName)
-
+    if ($genre -ne "Unknown" -and $count -gt 5) {  # Reduced threshold to 5 tracks
+        $genrePlaylistName = SanitizeFileName($genre)
+        
         if ($genrePlaylistName.Length -gt 50) { 
             $genrePlaylistName = $genrePlaylistName.Substring(0,50) 
         }
@@ -403,12 +491,14 @@ foreach ($genre in $genreKeys) {
             $stream.WriteLine($track.FilePath)
         }
         $stream.Close()
+        
+        Write-Host "  -> Created playlist: $genrePlaylistName ($count tracks)" -ForegroundColor Green
     }
 }
 
 Show-Progress -Activity "Writing genre playlists" -Completed
 
-# Clean up results to free memory
+# Clean up
 $results = $null
 [System.GC]::Collect()
 [System.GC]::WaitForPendingFinalizers()
@@ -432,14 +522,14 @@ $stopwatch.Stop()
 "Files processed: $total_files" | Out-File -FilePath $logFile -Append
 "Files with genre: $files_with_genre" | Out-File -FilePath $logFile -Append
 "Files without genre: $($total_files - $files_with_genre)" | Out-File -FilePath $logFile -Append
-"Genres found: $($genreCount.Keys.Count)" | Out-File -FilePath $logFile -Append
+"Genres found: $($genreKeys.Count)" | Out-File -FilePath $logFile -Append
 "Playlists merged: $($mergeResults.Merged)" | Out-File -FilePath $logFile -Append
 "Playlists removed: $($mergeResults.Removed)" | Out-File -FilePath $logFile -Append
 "Peak memory usage: $(Get-MemoryUsage) MB" | Out-File -FilePath $logFile -Append
 
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Green
-Write-Host "COMPLETED! (Memory Optimized)" -ForegroundColor Green
+Write-Host "COMPLETED! (Expanded Genre Detection)" -ForegroundColor Green
 Write-Host "Main playlist: $main_playlist" -ForegroundColor Cyan
 Write-Host "Genre playlists: $genre_dir\" -ForegroundColor Cyan
 Write-Host "Log file: $logFile" -ForegroundColor Cyan
