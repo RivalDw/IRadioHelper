@@ -380,36 +380,55 @@ function Merge-SimilarPlaylists {
     function Normalize-GenreNameForMerge {
         param([string]$genreName)
         
-        # Приводим к нижнему регистру и заменяем похожие варианты написания
+        # Приводим к нижнему регистру
         $normalized = $genreName.ToLower().Trim()
         
-        # Заменяем все разделители на пробелы для единообразия
-        $normalized = $normalized -replace '[_\-\s]+', ' '
+        # Заменяем разделители на пробелы
+        $normalized = $normalized -replace '_', ' '
+        $normalized = $normalized -replace '-', ' '
+        $normalized = $normalized -replace '/', ' '
         $normalized = $normalized.Trim()
         
-        # Заменяем похожие варианты написания на единый стандарт
-        $variationMap = @{
-            "synthpop" = "synth pop"
-            "electropop" = "electro pop"
-            "r b" = "r&b"
-            "rnb" = "r&b"
-            "hiphop" = "hip hop"
-            "industrialmetal" = "industrial metal"
-            "alternativerock" = "alternative rock"
-            "alternativehiphop" = "alternative hip hop"
-            "undergroundhiphop" = "underground hip hop"
-            "technohouse" = "techno house"
-            "synthhouse" = "synth house"
-            "eurohouse" = "euro house"
-            "hi nrg" = "hi-nrg"
-            "rus rap" = "rusrap"
-        }
-        
-        if ($variationMap.ContainsKey($normalized)) {
-            return $variationMap[$normalized]
-        }
-        
         return $normalized
+    }
+    
+    # Функция для разбивки названия плейлиста на жанры с учетом составных названий
+    function Split-IntoGenres {
+        param([string]$playlistName)
+        
+        # Список составных жанров, которые не нужно разбивать (в порядке приоритета)
+        $compoundGenres = @(
+            "alternative hip hop", "underground hip hop", "hip hop", "gangsta rap", "rap rock",
+            "synth pop", "electro pop", "industrial metal", "alternative rock", "techno house",
+            "synth house", "euro house", "hi nrg", "pop punk", "nu metal", "sleaze rock",
+            "progressive electronic", "melodic hardcore", "r&b", "rusrap", "brit pop",
+            "rap hip hop", "hip hop rap"
+        )
+        
+        $genres = @()
+        $remainingName = Normalize-GenreNameForMerge $playlistName
+        
+        # Сначала ищем составные жанры (от самых длинных к самым коротким)
+        foreach ($compound in $compoundGenres | Sort-Object { $_.Length } -Descending) {
+            while ($remainingName -match $compound) {
+                $genres += $compound
+                $remainingName = $remainingName -replace $compound, '|'
+            }
+        }
+        
+        # Затем разбиваем оставшуюся часть на отдельные слова
+        $remainingParts = $remainingName -split '[_\-\s\/\|]+' | Where-Object { 
+            $_ -ne "" -and $_ -ne " " -and $_.Length -gt 1 
+        }
+        
+        foreach ($part in $remainingParts) {
+            $normalizedPart = $part.Trim()
+            if ($normalizedPart -ne "" -and $normalizedPart -notin $genres -and $normalizedPart -ne "10s") {
+                $genres += $normalizedPart
+            }
+        }
+        
+        return $genres | Sort-Object
     }
     
     $allPlaylists = Get-ChildItem -Path $playlistsDir -Filter "*.m3u" -File
@@ -419,18 +438,12 @@ function Merge-SimilarPlaylists {
     foreach ($playlist in $allPlaylists) {
         $baseName = $playlist.BaseName
         
-        # Разбиваем на жанры по любому разделителю
-        $genres = $baseName -split '[_\-\s]+' | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne "" -and $_ -ne " " }
-        
-        # Нормализуем названия жанров
-        $normalizedGenres = $genres | ForEach-Object { Normalize-GenreNameForMerge $_ } | Sort-Object
-        
-        # Убираем дубликаты после нормализации
-        $uniqueNormalizedGenres = $normalizedGenres | Get-Unique
+        # Разбиваем на жанры с учетом составных названий
+        $genres = Split-IntoGenres -playlistName $baseName
         
         # Создаем HashSet правильно
         $genreSet = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-        foreach ($genre in $uniqueNormalizedGenres) {
+        foreach ($genre in $genres) {
             $null = $genreSet.Add($genre)
         }
         
@@ -438,10 +451,9 @@ function Merge-SimilarPlaylists {
             Path = $playlist.FullName
             Name = $playlist.Name
             BaseName = $baseName
-            OriginalGenres = $genres
-            NormalizedGenres = $uniqueNormalizedGenres
+            Genres = $genres
             GenreSet = $genreSet
-            GenreKey = ($uniqueNormalizedGenres -join '_').ToLower()
+            GenreKey = ($genres -join '_').ToLower()
         }
     }
     
@@ -451,6 +463,13 @@ function Merge-SimilarPlaylists {
     
     # Группируем плейлисты по основным жанрам
     Write-Host "Анализ плейлистов для объединения..." -ForegroundColor Cyan
+    
+    # Сначала выведем отладочную информацию о том, как разбились жанры
+    Write-Host "Отладочная информация о разбивке жанров:" -ForegroundColor Yellow
+    foreach ($pl in $playlistInfo) {
+        Write-Host "  $($pl.BaseName) -> $($pl.Genres -join ', ')" -ForegroundColor Gray
+    }
+    Write-Host ""
     
     for ($i = 0; $i -lt $playlistInfo.Count; $i++) {
         if ($processedPlaylists.ContainsKey($playlistInfo[$i].Path)) { continue }
@@ -490,15 +509,15 @@ function Merge-SimilarPlaylists {
         }
         
         if ($similarPlaylists.Count -gt 1) {
-            $currentGenresStr = $current.NormalizedGenres -join ', '
+            $currentGenresStr = $current.Genres -join ', '
             Write-Host "Объединение $($similarPlaylists.Count) плейлистов для жанров: $currentGenresStr" -ForegroundColor Cyan
             
             # Находим самый полный набор жанров (с наибольшим количеством жанров)
-            $maxGenres = $current.NormalizedGenres
+            $maxGenres = $current.Genres
             foreach ($playlistPath in $similarPlaylists) {
                 $pl = $playlistInfo | Where-Object { $_.Path -eq $playlistPath }
-                if ($pl.NormalizedGenres.Count -gt $maxGenres.Count) {
-                    $maxGenres = $pl.NormalizedGenres
+                if ($pl.Genres.Count -gt $maxGenres.Count) {
+                    $maxGenres = $pl.Genres
                 }
             }
             
@@ -523,7 +542,7 @@ function Merge-SimilarPlaylists {
             
             # Create merged playlist with the most complete genre set
             if ($allTracks.Count -gt 0) {
-                # Преобразуем нормализованные жанры обратно в читаемый формат с подчеркиванием
+                # Преобразуем жанры в читаемый формат с подчеркиванием
                 $readableGenres = $maxGenres | ForEach-Object { 
                     (Get-Culture).TextInfo.ToTitleCase($_)
                 }
@@ -561,7 +580,8 @@ function Merge-SimilarPlaylists {
     Write-Host "Объединение завершено: $mergedCount объединенных плейлистов, $removedCount старых плейлистов удалено" -ForegroundColor Green
     return @{ Merged = $mergedCount; Removed = $removedCount }
 }
-# Main processing
+ 
+## Main processing
 Write-Host "Starting processing with improved genre detection..." -ForegroundColor Yellow
 Write-Host "Initial memory usage: $(Get-MemoryUsage) MB" -ForegroundColor Gray
 
